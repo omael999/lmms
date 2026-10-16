@@ -23,6 +23,13 @@
  */
 
 #include "PatternEditor.h"
+#include "SmartDrummer.h"
+#include "PluginFactory.h"
+#include "InstrumentTrack.h"
+#include <QToolButton>
+#include <QMenu>
+#include <QCoreApplication>
+#include <algorithm>
 
 #include <QAction>
 #include <QVBoxLayout>
@@ -31,6 +38,7 @@
 #include "ComboBox.h"
 #include "DataFile.h"
 #include "embed.h"
+#include "GuiApplication.h"
 #include "MainWindow.h"
 #include "PatternStore.h"
 #include "PatternTrack.h"
@@ -325,6 +333,46 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 	trackAndStepActionsToolBar->addAction(embed::getIconPixmap("add_automation"), tr("Add automation-track"),
 						m_editor, SLOT(addAutomationTrack()));
 
+	// FL-style "+" button: add any instrument as a new channel
+	trackAndStepActionsToolBar->addSeparator();
+	auto addChannelMenu = new QMenu(this);
+	auto instruments = getPluginFactory()->descriptors(Plugin::Type::Instrument);
+	std::sort(instruments.begin(), instruments.end(),
+		[](const Plugin::Descriptor* a, const Plugin::Descriptor* b) { return qstricmp(a->displayName, b->displayName) < 0; });
+	for (const Plugin::Descriptor* desc : instruments)
+	{
+		if (desc->subPluginFeatures) { continue; } // needs a sub-plugin key (LV2, ...): use the plugin browser
+		QAction* a = addChannelMenu->addAction(desc->logo->pixmap(16, 16), QString(desc->displayName));
+		a->setToolTip(QCoreApplication::translate("lmms::gui::PluginDescWidget", desc->description));
+		const QString pluginName = desc->name;
+		connect(a, &QAction::triggered, this, [pluginName]() {
+			auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, Engine::patternStore()));
+			if (it) { it->loadInstrument(pluginName); }
+		});
+	}
+	auto addChannelButton = new QToolButton(trackAndStepActionsToolBar);
+	addChannelButton->setIcon(embed::getIconPixmap("add"));
+	addChannelButton->setText(tr("Add channel"));
+	addChannelButton->setToolTip(tr("Add a new channel (instrument) to the Channel Rack"));
+	addChannelButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	addChannelButton->setMenu(addChannelMenu);
+	addChannelButton->setPopupMode(QToolButton::InstantPopup);
+	trackAndStepActionsToolBar->addWidget(addChannelButton);
+
+	// GarageBand-style Smart Drummer
+	QAction* drummerAction = trackAndStepActionsToolBar->addAction(embed::getIconPixmap("drummer"), tr("Smart Drummer"));
+	drummerAction->setToolTip(tr("Generate a drum beat for the current pattern (like GarageBand's Drummer)"));
+	connect(drummerAction, &QAction::triggered, this, [this]() {
+		auto dlg = new SmartDrummerDialog(this);
+		dlg->setAttribute(Qt::WA_DeleteOnClose);
+		dlg->show();
+	});
+	if (auto b = qobject_cast<QToolButton*>(trackAndStepActionsToolBar->widgetForAction(drummerAction)))
+	{
+		b->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		b->setObjectName("smartDrummerButton");
+	}
+
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	trackAndStepActionsToolBar->addWidget(stretch);
@@ -362,6 +410,7 @@ QSize PatternEditorWindow::sizeHint() const
 
 void PatternEditorWindow::play()
 {
+	getGUI()->mainWindow()->setTransportMode(false, false);
 	if (Engine::getSong()->playMode() != Song::PlayMode::Pattern)
 	{
 		Engine::getSong()->playPattern();

@@ -76,6 +76,7 @@ public:
 	}
 
 	Note * addStepNote( int step );
+	int steps() const { return m_steps; }
 	void setStep( int step, bool enabled );
 
 	//! Horizontally flip the positions of the given notes.

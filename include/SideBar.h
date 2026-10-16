@@ -45,6 +45,8 @@ public:
 	~SideBar() override = default;
 
 	void appendTab( SideBarWidget * _sbw );
+	//! Open the tab at @p index (in the order the tabs were appended)
+	void openTab(int index);
 
 
 private slots:

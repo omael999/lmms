@@ -54,6 +54,9 @@ STRING(TOUPPER          "${CMAKE_PROJECT_NAME}" PROJECT_NAME_UCASE)
 
 SET(PROJECT_YEAR 2026)
 
+# NovaBeat Studio: display name used for the window title, installer and shortcuts
+SET(APP_DISPLAY_NAME    "NovaBeat Studio")
+SET(APP_FILE_NAME       "NovaBeatStudio")
 SET(PROJECT_AUTHOR      "LMMS Developers")
 SET(PROJECT_URL         "https://lmms.io")
 SET(PROJECT_EMAIL       "lmms-devel@lists.sourceforge.net")

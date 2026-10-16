@@ -187,6 +187,7 @@ public:
 	SongEditorWindow( Song* song );
 
 	QSize sizeHint() const override;
+	bool followsTransportMode() const override { return true; }
 
 	SongEditor* m_editor;
 	void syncEditMode();

@@ -124,6 +124,18 @@ void SideBar::appendTab( SideBarWidget *widget )
 
 
 
+void SideBar::openTab(int index)
+{
+	const auto buttons = m_btnGroup.buttons();
+	if (index < 0 || index >= buttons.size()) { return; }
+	QAbstractButton* button = buttons.at(index);
+	button->setChecked(true);
+	toggleButton(button);
+}
+
+
+
+
 void SideBar::toggleButton( QAbstractButton * button )
 {
 	QToolButton *toolButton = nullptr;

@@ -51,6 +51,9 @@ class Editor : public QMainWindow
 public:
 	void setPauseIcon(bool displayPauseIcon=true);
 	QAction *playAction() const;
+	QAction* recordAction() const { return m_recordAction; }
+	//! Editors whose Space key follows the global FL-style PAT/SONG transport
+	virtual bool followsTransportMode() const { return false; }
 	static Editor* lastPlayedEditor() { return s_lastPlayedEditor; }
 protected:
 	DropToolBar * addDropToolBarToTop(QString const & windowTitle);

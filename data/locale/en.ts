@@ -8287,12 +8287,12 @@ Please make sure you have write permission to the file and the directory contain
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="666"/>
         <source>Song Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="667"/>
         <source>Pattern Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="675"/>
@@ -10779,13 +10779,13 @@ Please make sure you have write permission to the file and the directory contain
         <location filename="../../src/gui/MainWindow.cpp" line="432"/>
         <location filename="../../src/gui/MainWindow.cpp" line="1046"/>
         <source>Song Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/MainWindow.cpp" line="437"/>
         <location filename="../../src/gui/MainWindow.cpp" line="1050"/>
         <source>Pattern Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/MainWindow.cpp" line="441"/>
@@ -12427,7 +12427,7 @@ Warning: This operation can not be undone.</source>
     <message>
         <location filename="../../src/gui/editors/PatternEditor.cpp" line="283"/>
         <source>Pattern Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/editors/PatternEditor.cpp" line="301"/>
@@ -14666,7 +14666,7 @@ Latency: %2 ms</source>
     <message>
         <location filename="../../src/gui/editors/SongEditor.cpp" line="922"/>
         <source>Song-Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/editors/SongEditor.cpp" line="932"/>

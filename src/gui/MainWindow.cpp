@@ -34,6 +34,9 @@
 #include <QMessageBox>
 #include <QShortcut>
 #include <QSplitter>
+#include <QStyle>
+#include <QTimer>
+#include <QToolButton>
 
 #include "AboutDialog.h"
 #include "AutomationEditor.h"
@@ -53,6 +56,7 @@
 #include "MicrotunerConfig.h"
 #include "PathUtil.h"
 #include "PatternEditor.h"
+#include "PatternStore.h"
 #include "PianoRoll.h"
 #include "PianoView.h"
 #include "PluginBrowser.h"
@@ -101,6 +105,7 @@ MainWindow::MainWindow() :
 	hbox->setContentsMargins(0, 0, 0, 0);
 
 	auto sideBar = new SideBar(Qt::Vertical, w);
+	m_sideBar = sideBar;
 
 	auto splitter = new QSplitter(Qt::Horizontal, w);
 	splitter->setChildrenCollapsible( false );
@@ -199,6 +204,10 @@ MainWindow::MainWindow() :
 	m_toolBarLayout = new QGridLayout( m_toolBar/*, 2, 1*/ );
 	m_toolBarLayout->setContentsMargins(0, 0, 0, 0);
 	m_toolBarLayout->setSpacing( 0 );
+
+	// FL-style PAT/SONG transport, placed right after the project/window buttons
+	m_songMode = ConfigManager::inst()->value("ui", "transportsongmode").toInt() != 0;
+	createTransport();
 
 	vbox->addWidget( m_toolBar );
 	vbox->addWidget( w );
@@ -430,24 +439,24 @@ void MainWindow::finalize()
 
 
 	// window-toolbar
-	auto song_editor_window = new ToolButton(embed::getIconPixmap("songeditor"), tr("Song Editor") + " (Ctrl+1)", this,
+	auto song_editor_window = new ToolButton(embed::getIconPixmap("songeditor"), tr("Song Editor") + " (F5)", this,
 		SLOT(toggleSongEditorWin()), m_toolBar);
 	song_editor_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_1));
 
 	auto pattern_editor_window = new ToolButton(embed::getIconPixmap("pattern_track_btn"),
-		tr("Pattern Editor") + " (Ctrl+2)", this, SLOT(togglePatternEditorWin()), m_toolBar);
+		tr("Pattern Editor") + " (F6)", this, SLOT(togglePatternEditorWin()), m_toolBar);
 	pattern_editor_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_2));
 
 	auto piano_roll_window = new ToolButton(
-		embed::getIconPixmap("piano"), tr("Piano Roll") + " (Ctrl+3)", this, SLOT(togglePianoRollWin()), m_toolBar);
+		embed::getIconPixmap("piano"), tr("Piano Roll") + " (F7)", this, SLOT(togglePianoRollWin()), m_toolBar);
 	piano_roll_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_3));
 
 	auto automation_editor_window = new ToolButton(embed::getIconPixmap("automation"),
-		tr("Automation Editor") + " (Ctrl+4)", this, SLOT(toggleAutomationEditorWin()), m_toolBar);
+		tr("Automation Editor") + " (F8)", this, SLOT(toggleAutomationEditorWin()), m_toolBar);
 	automation_editor_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_4));
 
 	auto mixer_window = new ToolButton(
-		embed::getIconPixmap("mixer"), tr("Mixer") + " (Ctrl+5)", this, SLOT(toggleMixerWin()), m_toolBar);
+		embed::getIconPixmap("mixer"), tr("Mixer") + " (F9)", this, SLOT(toggleMixerWin()), m_toolBar);
 	mixer_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_5));
 
 	auto controllers_window = new ToolButton(embed::getIconPixmap("controller"),
@@ -457,6 +466,15 @@ void MainWindow::finalize()
 	auto project_notes_window = new ToolButton(embed::getIconPixmap("project_notes"),
 		tr("Show/hide project notes") + " (Ctrl+7)", this, SLOT(toggleProjectNotesWin()), m_toolBar);
 	project_notes_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_7));
+
+	// FL Studio function-key layout (the Ctrl+number shortcuts above keep working too)
+	new QShortcut(QKeySequence(Qt::Key_F5), this, SLOT(toggleSongEditorWin()));
+	new QShortcut(QKeySequence(Qt::Key_F6), this, SLOT(togglePatternEditorWin()));
+	new QShortcut(QKeySequence(Qt::Key_F7), this, SLOT(togglePianoRollWin()));
+	new QShortcut(QKeySequence(Qt::Key_F8), this, SLOT(toggleAutomationEditorWin()));
+	new QShortcut(QKeySequence(Qt::Key_F9), this, SLOT(toggleMixerWin()));
+	new QShortcut(QKeySequence(Qt::Key_F10), this, SLOT(showSettingsDialog()));
+	new QShortcut(QKeySequence(Qt::Key_F12), this, SLOT(hideAllEditorWindows()));
 
 	m_toolBarLayout->addWidget( song_editor_window, 1, 1 );
 	m_toolBarLayout->addWidget( pattern_editor_window, 1, 2 );
@@ -502,6 +520,31 @@ void MainWindow::finalize()
 	getGUI()->pianoRoll()->parentWidget()->hide();
 	getGUI()->songEditor()->parentWidget()->move(5, 5);
 	getGUI()->songEditor()->parentWidget()->show();
+
+	// New projects get the FL-style window arrangement once the workspace has its final size
+	// (createNewProjectFromTemplate() clears the file name right after loading, so check it afterwards)
+	connect(Engine::getSong(), &Song::projectLoaded, this, [this]() {
+		QTimer::singleShot(0, this, [this]() {
+			if (Engine::getSong()->projectFileName().isEmpty()) { arrangeStartupWindows(); }
+		});
+	});
+	// FL behaviour: while the Playlist fills the workspace it stays behind the floating windows
+	// (Channel Rack, Piano Roll, Mixer...) even when you click on it.
+	connect(m_workspace, &QMdiArea::subWindowActivated, this, [this](QMdiSubWindow* sw) {
+		QWidget* songWin = getGUI()->songEditor()->parentWidget();
+		if (sw == nullptr || sw != songWin) { return; }
+		const QSize area = m_workspace->viewport()->size();
+		const bool fillsWorkspace = sw->isMaximized()
+			|| (sw->width() >= area.width() - 8 && sw->height() >= area.height() - 8);
+		if (fillsWorkspace)
+		{
+			QTimer::singleShot(0, sw, [sw]() { sw->lower(); });
+		}
+	});
+
+	// Open the sample browser on the left, like FL's browser
+	if (m_sideBar) { m_sideBar->openTab(3); }
+	updateTransportButtons();
 
 	// reset window title every time we change the state of a subwindow to show the correct title
 	for( const QMdiSubWindow * subWindow : workspace()->subWindowList() )
@@ -590,7 +633,7 @@ void MainWindow::resetWindowTitle()
 		title += " - " + tr( "Recover session. Please save your work!" );
 	}
 
-	setWindowTitle( title + " - " + tr( "LMMS %1" ).arg( LMMS_VERSION ) );
+	setWindowTitle(title + " - " + QString("%1 %2").arg(LMMS_APP_NAME, LMMS_VERSION));
 }
 
 
@@ -1044,24 +1087,24 @@ void MainWindow::updateViewMenu()
 	// Not that it's straight visible <-> invisible, more like
 	// not on top -> top <-> invisible
 	m_viewMenu->addAction(embed::getIconPixmap( "songeditor" ),
-			      tr( "Song Editor" ) + "\tCtrl+1",
+			      tr( "Song Editor" ) + "\tF5",
 			      this, SLOT(toggleSongEditorWin())
 		);
 	m_viewMenu->addAction(embed::getIconPixmap("pattern_track"),
-					tr("Pattern Editor") + "\tCtrl+2",
+					tr("Pattern Editor") + "\tF6",
 					this, SLOT(togglePatternEditorWin())
 		);
 	m_viewMenu->addAction(embed::getIconPixmap( "piano" ),
-			      tr( "Piano Roll" ) + "\tCtrl+3",
+			      tr( "Piano Roll" ) + "\tF7",
 			      this, SLOT(togglePianoRollWin())
 		);
 	m_viewMenu->addAction(embed::getIconPixmap( "automation" ),
-			      tr( "Automation Editor" ) + "\tCtrl+4",
+			      tr( "Automation Editor" ) + "\tF8",
 			      this,
 			      SLOT(toggleAutomationEditorWin())
 		);
 	m_viewMenu->addAction(embed::getIconPixmap( "mixer" ),
-			      tr( "Mixer" ) + "\tCtrl+5",
+			      tr( "Mixer" ) + "\tF9",
 			      this, SLOT(toggleMixerWin())
 		);
 	m_viewMenu->addAction(embed::getIconPixmap( "controller" ),
@@ -1181,6 +1224,7 @@ void MainWindow::updatePlayPauseIcons()
 	getGUI()->automationEditor()->setPauseIcon( false );
 	getGUI()->patternEditor()->setPauseIcon( false );
 	getGUI()->pianoRoll()->setPauseIcon( false );
+	updateTransportButtons();
 
 	if( Engine::getSong()->isPlaying() )
 	{
@@ -1207,6 +1251,178 @@ void MainWindow::updatePlayPauseIcons()
 		}
 	}
 }
+
+
+// ---------------------------------------------------------------------------
+// FL-style global transport (PAT / SONG)
+// ---------------------------------------------------------------------------
+
+void MainWindow::createTransport()
+{
+	auto makeModeButton = [this](const QString& text, const QString& tip) {
+		auto b = new QToolButton(m_toolBar);
+		b->setText(text);
+		b->setToolTip(tip);
+		b->setCheckable(true);
+		b->setObjectName("transportModeButton");
+		b->setFixedSize(48, 28);
+		b->setFocusPolicy(Qt::NoFocus);
+		return b;
+	};
+	m_patModeButton = makeModeButton(tr("PAT"), tr("Pattern mode: Play plays the current pattern of the Channel Rack"));
+	m_songModeButton = makeModeButton(tr("SONG"), tr("Song mode: Play plays the whole Playlist"));
+	connect(m_patModeButton, &QToolButton::clicked, this, [this]() { setTransportMode(false); });
+	connect(m_songModeButton, &QToolButton::clicked, this, [this]() { setTransportMode(true); });
+
+	auto makeTransportButton = [this](const char* icon, const QString& tip, const char* name) {
+		auto b = new QToolButton(m_toolBar);
+		b->setIcon(embed::getIconPixmap(icon));
+		b->setIconSize(QSize(22, 22));
+		b->setToolTip(tip);
+		b->setObjectName(name);
+		b->setFixedSize(46, 56);
+		b->setFocusPolicy(Qt::NoFocus);
+		return b;
+	};
+	m_transportPlayButton = makeTransportButton("play", tr("Play / Stop (Space)"), "transportPlayButton");
+	m_transportStopButton = makeTransportButton("stop", tr("Stop"), "transportStopButton");
+	m_transportRecordButton = makeTransportButton("record", tr("Record"), "transportRecordButton");
+	connect(m_transportPlayButton, &QToolButton::clicked, this, &MainWindow::transportPlayStop);
+	connect(m_transportStopButton, &QToolButton::clicked, this, &MainWindow::transportStop);
+	connect(m_transportRecordButton, &QToolButton::clicked, this, &MainWindow::transportRecord);
+
+	m_toolBarLayout->setColumnMinimumWidth(8, 16);
+	m_toolBarLayout->addWidget(m_patModeButton, 0, 9, Qt::AlignBottom);
+	m_toolBarLayout->addWidget(m_songModeButton, 1, 9, Qt::AlignTop);
+	m_toolBarLayout->setColumnMinimumWidth(10, 6);
+	m_toolBarLayout->addWidget(m_transportPlayButton, 0, 11, 2, 1);
+	m_toolBarLayout->addWidget(m_transportStopButton, 0, 12, 2, 1);
+	m_toolBarLayout->addWidget(m_transportRecordButton, 0, 13, 2, 1);
+	m_toolBarLayout->setColumnMinimumWidth(14, 8);
+}
+
+
+
+
+void MainWindow::updateTransportButtons()
+{
+	if (!m_patModeButton) { return; }
+	m_patModeButton->setChecked(!m_songMode);
+	m_songModeButton->setChecked(m_songMode);
+	const bool playing = Engine::getSong()->isPlaying();
+	m_transportPlayButton->setIcon(embed::getIconPixmap(playing ? "pause" : "play"));
+	m_transportPlayButton->setProperty("playing", playing);
+	m_transportPlayButton->style()->unpolish(m_transportPlayButton);
+	m_transportPlayButton->style()->polish(m_transportPlayButton);
+}
+
+
+
+
+void MainWindow::setTransportMode(bool songMode, bool restartPlayback)
+{
+	if (m_songMode != songMode)
+	{
+		m_songMode = songMode;
+		ConfigManager::inst()->setValue("ui", "transportsongmode", QString::number(songMode ? 1 : 0));
+		const auto mode = Engine::getSong()->playMode();
+		const bool playingOther = Engine::getSong()->isPlaying()
+			&& (mode == Song::PlayMode::Song || mode == Song::PlayMode::Pattern);
+		if (restartPlayback && playingOther)
+		{
+			Engine::getSong()->stop();
+			transportPlayStop();
+		}
+		emit transportModeChanged(songMode);
+	}
+	updateTransportButtons();
+}
+
+
+
+
+void MainWindow::transportPlayStop()
+{
+	Editor* editor = m_songMode
+		? static_cast<Editor*>(getGUI()->songEditor())
+		: static_cast<Editor*>(getGUI()->patternEditor());
+	editor->togglePlayStop();
+}
+
+
+
+
+void MainWindow::transportPause()
+{
+	Editor* editor = m_songMode
+		? static_cast<Editor*>(getGUI()->songEditor())
+		: static_cast<Editor*>(getGUI()->patternEditor());
+	editor->togglePause();
+}
+
+
+
+
+void MainWindow::transportStop()
+{
+	Engine::getSong()->stop();
+	getGUI()->pianoRoll()->stopRecording();
+}
+
+
+
+
+void MainWindow::transportRecord()
+{
+	// Recording happens on the timeline, so switch to SONG mode like FL does
+	setTransportMode(true, false);
+	if (QAction* rec = getGUI()->songEditor()->recordAction()) { rec->trigger(); }
+}
+
+
+
+
+void MainWindow::hideAllEditorWindows()
+{
+	for (QMdiSubWindow* sw : m_workspace->subWindowList())
+	{
+		sw->hide();
+	}
+	refocus();
+}
+
+
+
+
+void MainWindow::arrangeStartupWindows()
+{
+	const QSize area = m_workspace->viewport()->size();
+	if (area.width() < 400 || area.height() < 300) { return; }
+
+	QWidget* songWin = getGUI()->songEditor()->parentWidget();
+	QWidget* patWin = getGUI()->patternEditor()->parentWidget();
+
+	// Playlist fills the workspace like FL's main playlist
+	songWin->setGeometry(0, 0, area.width(), area.height());
+	songWin->show();
+	getGUI()->songEditor()->show();
+
+	// Channel Rack floats on top of it
+	// Size the rack to its channels (about 32 px per row plus toolbar and ruler), like FL's compact rack
+	const int rows = std::max<int>(4, static_cast<int>(Engine::patternStore()->tracks().size()));
+	const int w = std::min(820, area.width() - 60);
+	const int h = std::min(110 + 32 * rows + 24, area.height() - 60);
+	patWin->setGeometry(std::max(10, area.width() / 2 - w / 2 - 80), 40, w, h);
+	patWin->show();
+	getGUI()->patternEditor()->show();
+	patWin->raise();
+	m_workspace->setActiveSubWindow(qobject_cast<QMdiSubWindow*>(patWin));
+
+	getGUI()->pianoRoll()->parentWidget()->hide();
+	getGUI()->automationEditor()->parentWidget()->hide();
+	if (getGUI()->mixerView()->parentWidget()) { getGUI()->mixerView()->parentWidget()->hide(); }
+}
+
 
 
 void MainWindow::updateUndoRedoButtons()
@@ -1314,11 +1530,8 @@ void MainWindow::keyPressEvent( QKeyEvent * _ke )
 		case Qt::Key_Alt: m_keyMods.m_alt = true; break;
 		case Qt::Key_Space:
 		{
-			if (Editor::lastPlayedEditor() != nullptr)
-			{
-				if (m_keyMods.m_shift) { Editor::lastPlayedEditor()->togglePause(); }
-				else { Editor::lastPlayedEditor()->togglePlayStop(); }
-			}
+			if (m_keyMods.m_shift) { transportPause(); }
+			else { transportPlayStop(); }
 			break;
 		}
 		default:

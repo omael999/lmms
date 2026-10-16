@@ -1079,6 +1079,7 @@ void SongEditorWindow::changeEvent(QEvent *event)
 
 void SongEditorWindow::play()
 {
+	getGUI()->mainWindow()->setTransportMode(true, false);
 	emit playTriggered();
 	if( Engine::getSong()->playMode() != Song::PlayMode::Song )
 	{

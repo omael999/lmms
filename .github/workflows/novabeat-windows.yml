@@ -1,0 +1,80 @@
+---
+# Builds the NovaBeat Studio installer for Windows (64-bit).
+# Runs on every push to the "novabeat" branch, or manually from the Actions tab.
+name: NovaBeat Studio - Windows
+'on':
+  push:
+    branches: [novabeat]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-installer:
+    name: Windows installer (64-bit)
+    runs-on: ubuntu-latest
+    env:
+      CMAKE_OPTS: >-
+        -DCMAKE_BUILD_TYPE=Release
+        -DTARGET_UARCH=official
+        -DUSE_COMPILE_CACHE=ON
+      CCACHE_MAXSIZE: 0
+      CCACHE_NOCOMPRESS: 1
+    steps:
+      - name: Configure git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up environment
+        run: |
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" | tee -a "$GITHUB_ENV"
+      - name: Cache vcpkg dependencies
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          key: novabeat-vcpkg-mingw64-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            novabeat-vcpkg-mingw64-
+          path: build/vcpkg_installed
+      - name: Cache ccache data
+        uses: actions/cache@v6
+        with:
+          key: "novabeat-ccache-${{ github.ref }}-${{ github.run_id }}"
+          restore-keys: |
+            novabeat-ccache-${{ github.ref }}-
+            novabeat-ccache-
+          path: ~/.cache/ccache
+      - name: Install dependencies
+        run: |
+          sudo .github/workflows/setup-mingw-packages.sh
+          sudo apt-get install -y --no-install-recommends \
+            $(xargs < .github/workflows/deps-ubuntu-24.04-mingw.txt)
+      - name: Configure
+        run: |
+          export VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT}
+          echo "VCPKG_ROOT=${VCPKG_ROOT}" >> "$GITHUB_ENV"
+          ccache --zero-stats
+          cmake -S . \
+                -B build \
+                -DCMAKE_TOOLCHAIN_FILE="./cmake/toolchains/x64-mingw-vcpkg.cmake" \
+                -DVCPKG_MANIFEST_INSTALL="${{ env.should_install_manifest }}" \
+                $CMAKE_OPTS
+        env:
+          should_install_manifest:
+            ${{ steps.cache-deps.outputs.cache-hit == 'true' && 'NO' || 'YES' }}
+      - name: Build
+        run: cmake --build build
+      - name: Package
+        run: cmake --build build --target package
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: build/NovaBeatStudio-*.exe
+      - name: Trim ccache
+        run: ccache --cleanup
+        env:
+          CCACHE_MAXSIZE: 500M

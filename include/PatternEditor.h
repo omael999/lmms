@@ -88,6 +88,7 @@ public:
 	~PatternEditorWindow() = default;
 
 	QSize sizeHint() const override;
+	bool followsTransportMode() const override { return true; }
 
 	PatternEditor* m_editor;
 

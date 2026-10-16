@@ -701,17 +701,15 @@ void ConfigManager::saveConfigFile()
 void ConfigManager::initPortableWorkingDir()
 {
 	QString applicationPath = qApp->applicationDirPath();
-	m_workingDir = applicationPath + "/lmms-workspace/";
-	m_lmmsRcFile = applicationPath + "/.lmmsrc.xml";
+	m_workingDir = applicationPath + "/novabeat-workspace/";
+	m_lmmsRcFile = applicationPath + "/.novabeatrc.xml";
 }
 
 void ConfigManager::initInstalledWorkingDir()
 {
-	m_workingDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/lmms/";
-	m_lmmsRcFile = QDir::home().absolutePath() +"/.lmmsrc.xml";
-	// Detect < 1.2.0 working directory as a courtesy
-	if ( QFileInfo( QDir::home().absolutePath() + "/lmms/projects/" ).exists() )
-		m_workingDir = QDir::home().absolutePath() + "/lmms/";
+	// NovaBeat Studio keeps its own settings and workspace so it never clashes with a stock LMMS install
+	m_workingDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/NovaBeat Studio/";
+	m_lmmsRcFile = QDir::home().absolutePath() + "/.novabeatrc.xml";
 }
 
 void ConfigManager::initDevelopmentWorkingDir()

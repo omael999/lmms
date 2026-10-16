@@ -34,6 +34,7 @@
 #include "ConfigManager.h"
 
 class QAction;
+class QToolButton;
 class QDomElement;
 class QGridLayout;
 
@@ -44,6 +45,7 @@ namespace gui
 {
 
 class PluginView;
+class SideBar;
 class SubWindow;
 class ToolButton;
 
@@ -140,8 +142,12 @@ public:
 
 	bool eventFilter(QObject* watched, QEvent* event) override;
 
+	//! FL-style transport: true = SONG (playlist) mode, false = PAT (channel rack) mode
+	bool isSongMode() const { return m_songMode; }
+
 signals:
 	void detachAllSubWindows(bool detached);
+	void transportModeChanged(bool songMode);
 
 public slots:
 	void resetWindowTitle();
@@ -168,6 +174,17 @@ public slots:
 
 	void updatePlayPauseIcons();
 
+	// FL-style global transport
+	void setTransportMode(bool songMode, bool restartPlayback = true);
+	void setPatternMode() { setTransportMode(false); }
+	void setSongMode() { setTransportMode(true); }
+	void toggleTransportMode() { setTransportMode(!m_songMode); }
+	void transportPlayStop();
+	void transportPause();
+	void transportStop();
+	void transportRecord();
+	void hideAllEditorWindows();
+
 	void updateUndoRedoButtons();
 	void undo();
 	void redo();
@@ -192,6 +209,10 @@ private:
 	void finalize();
 
 	void toggleWindow( QWidget *window, bool forceShow = false );
+
+	void createTransport();
+	void updateTransportButtons();
+	void arrangeStartupWindows();
 
 	void exportProject(bool multiExport = false);
 	void handleSaveResult(QString const & filename, bool songSavedSuccessfully);
@@ -245,6 +266,14 @@ private:
 	QMenu * m_viewMenu;
 
 	ToolButton * m_metronomeToggle;
+
+	bool m_songMode = false;
+	QToolButton* m_patModeButton = nullptr;
+	QToolButton* m_songModeButton = nullptr;
+	QToolButton* m_transportPlayButton = nullptr;
+	QToolButton* m_transportStopButton = nullptr;
+	QToolButton* m_transportRecordButton = nullptr;
+	SideBar* m_sideBar = nullptr;
 
 	SessionState m_session;
 	

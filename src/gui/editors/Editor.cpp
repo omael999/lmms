@@ -143,7 +143,13 @@ void Editor::keyPressEvent(QKeyEvent* ke)
 {
 	if (ke->key() == Qt::Key_Space)
 	{
-		if (ke->modifiers() & Qt::ShiftModifier)
+		if (followsTransportMode())
+		{
+			// Playlist / Channel Rack: Space plays according to PAT/SONG, like FL Studio
+			if (ke->modifiers() & Qt::ShiftModifier) { getGUI()->mainWindow()->transportPause(); }
+			else { getGUI()->mainWindow()->transportPlayStop(); }
+		}
+		else if (ke->modifiers() & Qt::ShiftModifier)
 		{
 			togglePause();
 		}

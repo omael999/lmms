@@ -8291,12 +8291,12 @@ Asegúrate de tener permisos de escritura tanto del archivo como del directorio 
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="666"/>
         <source>Song Editor</source>
-        <translation>Editor de Canción</translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="667"/>
         <source>Pattern Editor</source>
-        <translation>Editor de patrón</translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/FileBrowser.cpp" line="675"/>
@@ -10785,13 +10785,13 @@ Asegúrate de tener permisos de escritura tanto del archivo como del directorio 
         <location filename="../../src/gui/MainWindow.cpp" line="432"/>
         <location filename="../../src/gui/MainWindow.cpp" line="1046"/>
         <source>Song Editor</source>
-        <translation>Editor de Canción</translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/MainWindow.cpp" line="437"/>
         <location filename="../../src/gui/MainWindow.cpp" line="1050"/>
         <source>Pattern Editor</source>
-        <translation>Editor de patrón</translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/MainWindow.cpp" line="441"/>
@@ -10809,7 +10809,7 @@ Asegúrate de tener permisos de escritura tanto del archivo como del directorio 
         <location filename="../../src/gui/MainWindow.cpp" line="449"/>
         <location filename="../../src/gui/MainWindow.cpp" line="1063"/>
         <source>Mixer</source>
-        <translation>Mezcla</translation>
+        <translation>Mixer</translation>
     </message>
     <message>
         <location filename="../../src/gui/MainWindow.cpp" line="453"/>
@@ -11014,6 +11014,34 @@ Por favor visita http://lmms.sf.net/wiki para obtener documentación acerca de L
         <location filename="../../src/gui/MainWindow.cpp" line="1600"/>
         <source>All file types</source>
         <translation>Todos los archivos</translation>
+    </message>
+    <message>
+        <source>PAT</source>
+        <translation>PAT</translation>
+    </message>
+    <message>
+        <source>SONG</source>
+        <translation>SONG</translation>
+    </message>
+    <message>
+        <source>Pattern mode: Play plays the current pattern of the Channel Rack</source>
+        <translation>Modo patrón: Reproducir toca el patrón actual del Channel Rack</translation>
+    </message>
+    <message>
+        <source>Song mode: Play plays the whole Playlist</source>
+        <translation>Modo canción: Reproducir toca toda la Playlist</translation>
+    </message>
+    <message>
+        <source>Play / Stop (Space)</source>
+        <translation>Reproducir / Detener (Espacio)</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Detener</translation>
+    </message>
+    <message>
+        <source>Record</source>
+        <translation>Grabar</translation>
     </message>
 </context>
 <context>
@@ -11798,7 +11826,7 @@ Advertencia: Esta operación no se puede deshacer.</translation>
     <message>
         <location filename="../../src/gui/MixerView.cpp" line="72"/>
         <source>Mixer</source>
-        <translation>Mezcla</translation>
+        <translation>Mixer</translation>
     </message>
 </context>
 <context>
@@ -12443,7 +12471,7 @@ Advertencia: Esta operación no se puede deshacer.</translation>
     <message>
         <location filename="../../src/gui/editors/PatternEditor.cpp" line="283"/>
         <source>Pattern Editor</source>
-        <translation>Editor de patrón</translation>
+        <translation>Channel Rack</translation>
     </message>
     <message>
         <location filename="../../src/gui/editors/PatternEditor.cpp" line="301"/>
@@ -12499,6 +12527,22 @@ Advertencia: Esta operación no se puede deshacer.</translation>
         <location filename="../../src/gui/editors/PatternEditor.cpp" line="338"/>
         <source>Clone Steps</source>
         <translation>Clonar Pasos</translation>
+    </message>
+    <message>
+        <source>Add channel</source>
+        <translation>Añadir canal</translation>
+    </message>
+    <message>
+        <source>Add a new channel (instrument) to the Channel Rack</source>
+        <translation>Añade un canal nuevo (instrumento) al Channel Rack</translation>
+    </message>
+    <message>
+        <source>Smart Drummer</source>
+        <translation>Batería inteligente</translation>
+    </message>
+    <message>
+        <source>Generate a drum beat for the current pattern (like GarageBand's Drummer)</source>
+        <translation>Genera un ritmo de batería para el patrón actual (como el Drummer de GarageBand)</translation>
     </message>
 </context>
 <context>
@@ -14686,7 +14730,7 @@ Asegúrate de tener al menos permisos de lectura sobre este archivo e inténtalo
     <message>
         <location filename="../../src/gui/editors/SongEditor.cpp" line="922"/>
         <source>Song-Editor</source>
-        <translation>Editor de Canción</translation>
+        <translation>Playlist</translation>
     </message>
     <message>
         <location filename="../../src/gui/editors/SongEditor.cpp" line="932"/>
@@ -16364,6 +16408,159 @@ Asegúrate de tener al menos permisos de lectura sobre este archivo e inténtalo
         <location filename="../../plugins/ZynAddSubFx/ZynAddSubFx.cpp" line="534"/>
         <source>Show GUI</source>
         <translation>Mostrar IGU</translation>
+    </message>
+</context>
+<context>
+    <name>lmms::gui::DrummerPad</name>
+    <message>
+        <source>Loud</source>
+        <translation>Fuerte</translation>
+    </message>
+    <message>
+        <source>Soft</source>
+        <translation>Suave</translation>
+    </message>
+    <message>
+        <source>Simple</source>
+        <translation>Sencillo</translation>
+    </message>
+    <message>
+        <source>Complex</source>
+        <translation>Complejo</translation>
+    </message>
+</context>
+<context>
+    <name>lmms::gui::SmartDrummerDialog</name>
+    <message>
+        <source>Smart Drummer</source>
+        <translation>Batería inteligente</translation>
+    </message>
+    <message>
+        <source>Pick a style and drag the puck: left/right for simple/complex, up/down for loud/soft. The beat is written into the current pattern of the Channel Rack.</source>
+        <translation>Elige un estilo y arrastra el punto: izquierda/derecha para sencillo/complejo, arriba/abajo para fuerte/suave. El ritmo se escribe en el patrón actual del Channel Rack.</translation>
+    </message>
+    <message>
+        <source>Kick</source>
+        <translation>Bombo</translation>
+    </message>
+    <message>
+        <source>Snare</source>
+        <translation>Caja</translation>
+    </message>
+    <message>
+        <source>Clap</source>
+        <translation>Palmas</translation>
+    </message>
+    <message>
+        <source>Hi-hat</source>
+        <translation>Charles</translation>
+    </message>
+    <message>
+        <source>Open hat</source>
+        <translation>Charles abierto</translation>
+    </message>
+    <message>
+        <source>Percussion</source>
+        <translation>Percusión</translation>
+    </message>
+    <message>
+        <source>Add missing drum channels automatically</source>
+        <translation>Añadir automáticamente los canales de batería que falten</translation>
+    </message>
+    <message>
+        <source>Use the style's typical tempo</source>
+        <translation>Usar el tempo típico del estilo</translation>
+    </message>
+    <message>
+        <source>Play / Stop</source>
+        <translation>Reproducir / Detener</translation>
+    </message>
+    <message>
+        <source>New variation</source>
+        <translation>Nueva variación</translation>
+    </message>
+    <message>
+        <source>Write beat</source>
+        <translation>Escribir ritmo</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Cerrar</translation>
+    </message>
+    <message>
+        <source>%1: %2 hits written into pattern %3.</source>
+        <translation>%1: %2 golpes escritos en el patrón %3.</translation>
+    </message>
+    <message>
+        <source>New channels: %1.</source>
+        <translation>Canales nuevos: %1.</translation>
+    </message>
+</context>
+<context>
+    <name>SmartDrummer</name>
+    <message>
+        <source>Pop</source>
+        <translation>Pop</translation>
+    </message>
+    <message>
+        <source>Rock</source>
+        <translation>Rock</translation>
+    </message>
+    <message>
+        <source>Hip-Hop</source>
+        <translation>Hip-Hop</translation>
+    </message>
+    <message>
+        <source>Trap</source>
+        <translation>Trap</translation>
+    </message>
+    <message>
+        <source>Reggaeton</source>
+        <translation>Reguetón</translation>
+    </message>
+    <message>
+        <source>House</source>
+        <translation>House</translation>
+    </message>
+    <message>
+        <source>Funk</source>
+        <translation>Funk</translation>
+    </message>
+    <message>
+        <source>Lo-Fi</source>
+        <translation>Lo-Fi</translation>
+    </message>
+    <message>
+        <source>Steady, radio-friendly groove</source>
+        <translation>Ritmo estable y comercial</translation>
+    </message>
+    <message>
+        <source>Driving straight eighths</source>
+        <translation>Corcheas rectas con mucho empuje</translation>
+    </message>
+    <message>
+        <source>Boom-bap with a lazy snare</source>
+        <translation>Boom-bap con caja relajada</translation>
+    </message>
+    <message>
+        <source>Half-time clap and busy hi-hats</source>
+        <translation>Palmas a medio tiempo y charles rápidos</translation>
+    </message>
+    <message>
+        <source>Classic dembow</source>
+        <translation>Dembow clásico</translation>
+    </message>
+    <message>
+        <source>Four on the floor, open hats on the offbeat</source>
+        <translation>Bombo en cada tiempo y charles abierto a contratiempo</translation>
+    </message>
+    <message>
+        <source>Syncopated kick and ghost notes</source>
+        <translation>Bombo sincopado y notas fantasma</translation>
+    </message>
+    <message>
+        <source>Soft, laid-back beat</source>
+        <translation>Ritmo suave y relajado</translation>
     </message>
 </context>
 </TS>
