@@ -88,6 +88,8 @@ protected:
 	void constructContextMenu( QMenu * ) override;
 	void mousePressEvent( QMouseEvent * _me ) override;
 	void mouseDoubleClickEvent( QMouseEvent * _me ) override;
+	void mouseMoveEvent(QMouseEvent* me) override;
+	void mouseReleaseEvent(QMouseEvent* me) override;
 	void paintEvent( QPaintEvent * pe ) override;
 	void wheelEvent( QWheelEvent * _we ) override;
 
@@ -101,6 +103,12 @@ private:
 
 	MidiClip* m_clip;
 	QPixmap m_paintPixmap;
+
+	//! FL-style step painting: drag across the Channel Rack to set/clear several steps
+	int m_paintStep = -1;
+	bool m_paintAdd = false;
+	int stepAt(int x) const;
+	void applyStepTool(int tool, int param);
 
 	QColor m_noteFillColor;
 	QColor m_noteBorderColor;

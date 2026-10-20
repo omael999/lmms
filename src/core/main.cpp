@@ -675,7 +675,8 @@ int main( int argc, char * * argv )
 	QString pos = ConfigManager::inst()->value( "app", "language" );
 	if( pos.isEmpty() )
 	{
-		pos = QLocale::system().name().left( 2 );
+		// NovaBeat Studio speaks Spanish by default (the language can be changed in Settings)
+		pos = "es";
 	}
 
 	// load actual translation for LMMS

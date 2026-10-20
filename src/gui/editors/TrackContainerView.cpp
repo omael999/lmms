@@ -23,6 +23,8 @@
  */
 
 #include "TrackContainerView.h"
+#include "PatternEditor.h"
+#include "PatternStore.h"
 
 
 #include <QLayout>
@@ -407,6 +409,8 @@ void TrackContainerView::dropEvent( QDropEvent * _de )
 			getPluginFactory()->pluginSupportingExtension(FileItem::extension(value));
 		Instrument * i = it->loadInstrument(piakn.info.name(), &piakn.key);
 		i->loadFile( value );
+		// Samples dropped on the Channel Rack get their own mixer track, like FL
+		if (m_tc == Engine::patternStore()) { PatternEditor::routeToNewMixerChannel(it); }
 		//it->toggledInstrumentTrackButton( true );
 		_de->accept();
 	}

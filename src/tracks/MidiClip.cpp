@@ -25,6 +25,10 @@
 
 #include "MidiClip.h"
 
+#include <optional>
+#include <vector>
+#include <random>
+
 #include <algorithm>
 #include <QDomElement>
 
@@ -595,6 +599,168 @@ void MidiClip::cloneSteps()
 	}
 	updateLength();
 	emit dataChanged();
+}
+
+
+
+
+namespace
+{
+
+struct StepCopy
+{
+	int step;
+	Note note;
+};
+
+std::vector<StepCopy>& stepClipboard()
+{
+	static std::vector<StepCopy> clipboard;
+	return clipboard;
+}
+
+int stepCountOfClipboard = 0;
+
+} // namespace
+
+
+
+
+void MidiClip::copyStepsToClipboard() const
+{
+	auto& cb = stepClipboard();
+	cb.clear();
+	for (const auto& note : m_notes)
+	{
+		if (note->type() != Note::Type::Step) { continue; }
+		cb.push_back({static_cast<int>(note->pos() / TimePos::stepPosition(1)), *note});
+	}
+	stepCountOfClipboard = m_steps;
+}
+
+
+
+
+bool MidiClip::hasStepsInClipboard()
+{
+	return stepCountOfClipboard > 0;
+}
+
+
+
+
+void MidiClip::applyStepTool(StepTool tool, int param)
+{
+	const int steps = m_steps;
+	if (steps <= 0) { return; }
+	const tick_t ticksPerStep = TimePos::stepPosition(1);
+
+	addJournalCheckPoint();
+
+	// Current step hits (one per step), keeping their volume/panning/key
+	std::vector<std::optional<Note>> grid(steps);
+	for (const auto& note : m_notes)
+	{
+		if (note->type() != Note::Type::Step) { continue; }
+		const int s = static_cast<int>(note->pos() / ticksPerStep);
+		if (s >= 0 && s < steps && note->pos() % ticksPerStep == 0) { grid[s] = *note; }
+	}
+
+	std::mt19937 rng(std::random_device{}());
+	std::uniform_int_distribution<int> percent(0, 99);
+	std::vector<std::optional<Note>> out(steps);
+	const auto plainStep = [&](int s) {
+		Note n(TimePos(DefaultTicksPerBar / 16), TimePos::stepPosition(s));
+		n.setType(Note::Type::Step);
+		return n;
+	};
+
+	switch (tool)
+	{
+		case StepTool::FillEach:
+		{
+			const int every = std::max(1, param);
+			for (int s = 0; s < steps; s += every) { out[s] = grid[s] ? *grid[s] : plainStep(s); }
+			break;
+		}
+		case StepTool::ShiftLeft:
+			for (int s = 0; s < steps; ++s) { out[s] = grid[(s + 1) % steps]; }
+			break;
+		case StepTool::ShiftRight:
+			for (int s = 0; s < steps; ++s) { out[s] = grid[(s + steps - 1) % steps]; }
+			break;
+		case StepTool::Reverse:
+			for (int s = 0; s < steps; ++s) { out[s] = grid[steps - 1 - s]; }
+			break;
+		case StepTool::Invert:
+			for (int s = 0; s < steps; ++s) { if (!grid[s]) { out[s] = plainStep(s); } }
+			break;
+		case StepTool::Randomize:
+		{
+			const int density = std::clamp(param, 5, 95);
+			for (int s = 0; s < steps; ++s)
+			{
+				// Beats are a bit more likely than off-beats, so the result still grooves
+				const int bonus = (s % 4 == 0) ? 20 : (s % 2 == 0 ? 5 : -10);
+				if (percent(rng) < density + bonus) { out[s] = grid[s] ? *grid[s] : plainStep(s); }
+			}
+			break;
+		}
+		case StepTool::Humanize:
+		{
+			std::uniform_int_distribution<int> delta(-std::max(1, param), std::max(1, param));
+			for (int s = 0; s < steps; ++s)
+			{
+				if (!grid[s]) { continue; }
+				out[s] = grid[s];
+				out[s]->setVolume(static_cast<volume_t>(std::clamp(grid[s]->getVolume() + delta(rng), 10, 200)));
+			}
+			break;
+		}
+		case StepTool::Accent:
+			for (int s = 0; s < steps; ++s)
+			{
+				if (!grid[s]) { continue; }
+				out[s] = grid[s];
+				const int vol = (s % 4 == 0) ? 115 : (s % 2 == 0 ? 90 : 70);
+				out[s]->setVolume(static_cast<volume_t>(vol));
+			}
+			break;
+		case StepTool::Paste:
+		{
+			const auto& cb = stepClipboard();
+			if (stepCountOfClipboard <= 0) { return; }
+			for (int s = 0; s < steps; ++s)
+			{
+				for (const auto& c : cb)
+				{
+					if (c.step == s % stepCountOfClipboard) { out[s] = c.note; }
+				}
+			}
+			break;
+		}
+	}
+
+	instrumentTrack()->lock();
+	for (auto it = m_notes.begin(); it != m_notes.end();)
+	{
+		if ((*it)->type() == Note::Type::Step) { delete *it; it = m_notes.erase(it); }
+		else { ++it; }
+	}
+	for (int s = 0; s < steps; ++s)
+	{
+		if (!out[s]) { continue; }
+		auto n = out[s]->clone();
+		n->setPos(TimePos::stepPosition(s));
+		n->setType(Note::Type::Step);
+		m_notes.insert(std::upper_bound(m_notes.begin(), m_notes.end(), n, Note::lessThan), n);
+	}
+	instrumentTrack()->unlock();
+
+	checkType();
+	updateLength();
+	emit dataChanged();
+	updatePatternTrack();
 }
 
 

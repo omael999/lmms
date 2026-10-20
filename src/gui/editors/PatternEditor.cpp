@@ -23,6 +23,14 @@
  */
 
 #include "PatternEditor.h"
+#include "MixerView.h"
+#include "Mixer.h"
+#include "Knob.h"
+#include "Instrument.h"
+#include "ConfigManager.h"
+#include <QLabel>
+#include <QFileInfo>
+#include <QFileDialog>
 #include "SmartDrummer.h"
 #include "PluginFactory.h"
 #include "InstrumentTrack.h"
@@ -107,6 +115,43 @@ void PatternEditor::removeSteps()
 		}
 	}
 	updateMaxSteps();
+}
+
+
+
+
+void PatternEditor::routeToNewMixerChannel(InstrumentTrack* track)
+{
+	if (!track || !getGUI() || !getGUI()->mixerView()) { return; }
+	const int index = getGUI()->mixerView()->addNewChannel();
+	if (index <= 0) { return; }
+	Engine::mixer()->mixerChannel(index)->m_name = track->name();
+	track->mixerChannelModel()->setValue(index);
+	getGUI()->mixerView()->updateMixerChannel(index);
+}
+
+
+
+
+int PatternEditor::currentSteps() const
+{
+	const tick_t ticksPerStep = TimePos::stepPosition(1);
+	const tick_t length = m_maxClipLength > 0 ? m_maxClipLength : TimePos::ticksPerBar();
+	return static_cast<int>(length / std::max<tick_t>(1, ticksPerStep));
+}
+
+
+
+
+void PatternEditor::clearCurrentPattern()
+{
+	for (const auto& track : model()->tracks())
+	{
+		if (track->type() != Track::Type::Instrument) { continue; }
+		auto clip = dynamic_cast<MidiClip*>(track->getClip(m_ps->currentPattern()));
+		if (clip && !clip->notes().empty()) { clip->clear(); }
+	}
+	Engine::getSong()->setModified();
 }
 
 
@@ -233,6 +278,7 @@ void PatternEditor::updateMaxSteps()
 		m_maxClipLength = std::max(m_maxClipLength, static_cast<tick_t>(clip->length()));
 	}
 	updatePixelsPerBar();
+	emit stepsChanged(currentSteps());
 }
 
 
@@ -314,7 +360,7 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 	DropToolBar* patternSelectionToolBar = addDropToolBarToTop(tr("Pattern selector"));
 
 	m_patternComboBox = new ComboBox(m_toolBar);
-	m_patternComboBox->setFixedSize(200, ComboBox::DEFAULT_HEIGHT);
+	m_patternComboBox->setFixedSize(170, ComboBox::DEFAULT_HEIGHT);
 	m_patternComboBox->setModel(&ps->m_patternComboBoxModel);
 
 	patternSelectionToolBar->addWidget(m_patternComboBox);
@@ -336,6 +382,23 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 	// FL-style "+" button: add any instrument as a new channel
 	trackAndStepActionsToolBar->addSeparator();
 	auto addChannelMenu = new QMenu(this);
+	QAction* sampleAction = addChannelMenu->addAction(embed::getIconPixmap("sample_file"), tr("Audio sample..."));
+	sampleAction->setToolTip(tr("Pick an audio file (WAV, OGG, MP3, FLAC...) and play it from a new channel"));
+	connect(sampleAction, &QAction::triggered, this, [this]() {
+		const QString file = QFileDialog::getOpenFileName(this, tr("Add audio sample"),
+			ConfigManager::inst()->userSamplesDir(),
+			tr("Audio files (*.wav *.ogg *.mp3 *.flac *.aif *.aiff *.ds *.au *.voc *.raw)"));
+		if (file.isEmpty()) { return; }
+		auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, Engine::patternStore()));
+		if (!it) { return; }
+		if (Instrument* inst = it->loadInstrument("audiofileprocessor"))
+		{
+			inst->loadFile(file);
+			it->setName(QFileInfo(file).completeBaseName());
+		}
+		PatternEditor::routeToNewMixerChannel(it);
+	});
+	addChannelMenu->addSeparator();
 	auto instruments = getPluginFactory()->descriptors(Plugin::Type::Instrument);
 	std::sort(instruments.begin(), instruments.end(),
 		[](const Plugin::Descriptor* a, const Plugin::Descriptor* b) { return qstricmp(a->displayName, b->displayName) < 0; });
@@ -347,7 +410,11 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		const QString pluginName = desc->name;
 		connect(a, &QAction::triggered, this, [pluginName]() {
 			auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, Engine::patternStore()));
-			if (it) { it->loadInstrument(pluginName); }
+			if (it)
+			{
+				it->loadInstrument(pluginName);
+				PatternEditor::routeToNewMixerChannel(it);
+			}
 		});
 	}
 	auto addChannelButton = new QToolButton(trackAndStepActionsToolBar);
@@ -373,9 +440,27 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		b->setObjectName("smartDrummerButton");
 	}
 
+	// FL-style swing for the whole Channel Rack
+	trackAndStepActionsToolBar->addSeparator();
+	auto swingKnob = new Knob(KnobType::Small17, tr("SWING"), trackAndStepActionsToolBar,
+		Knob::LabelRendering::LegacyFixedFontSize, tr("Swing"));
+	swingKnob->setModel(&Engine::getSong()->swingModel());
+	swingKnob->setHintText(tr("Swing:"), "%");
+	swingKnob->setToolTip(tr("Swing: delays every second 16th step for a shuffled groove"));
+	trackAndStepActionsToolBar->addWidget(swingKnob);
+
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	trackAndStepActionsToolBar->addWidget(stretch);
+
+	auto stepsLabel = new QLabel(trackAndStepActionsToolBar);
+	stepsLabel->setObjectName("channelRackStepsLabel");
+	stepsLabel->setToolTip(tr("Length of the current pattern"));
+	trackAndStepActionsToolBar->addWidget(stepsLabel);
+	connect(m_editor, &PatternEditor::stepsChanged, stepsLabel, [stepsLabel](int steps) {
+		stepsLabel->setText(tr("%1 steps").arg(steps) + "  ");
+	});
+	stepsLabel->setText(tr("%1 steps").arg(m_editor->currentSteps()) + "  ");
 
 
 	// Step actions
@@ -385,6 +470,8 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 						m_editor, SLOT(addSteps()));
 	trackAndStepActionsToolBar->addAction( embed::getIconPixmap("step_btn_duplicate"), tr("Clone Steps"),
 						m_editor, SLOT(cloneSteps()));
+	trackAndStepActionsToolBar->addAction(embed::getIconPixmap("edit_erase"), tr("Clear pattern (all steps of every channel)"),
+						m_editor, SLOT(clearCurrentPattern()));
 
 	connect(&ps->m_patternComboBoxModel, SIGNAL(dataChanged()),
 			m_editor, SLOT(updatePosition()));

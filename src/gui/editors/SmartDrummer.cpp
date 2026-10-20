@@ -75,7 +75,7 @@ struct Style
 
 const char* const R = "----------------";
 
-const std::array<Style, 8> Styles = {{
+const std::array<Style, 11> Styles = {{
 	{ QT_TRANSLATE_NOOP("SmartDrummer", "Pop"), QT_TRANSLATE_NOOP("SmartDrummer", "Steady, radio-friendly groove"), 110, {{
 		{ "x-------x-------", "-------o--o---o-" },
 		{ "----x-------x---", "-------.-.----.." },
@@ -125,6 +125,27 @@ const std::array<Style, 8> Styles = {{
 		{ "xoxoxoxoxoxoxoxo", R },
 		{ R,                  "--------------o-" },
 		{ R,                  "---o-----o------" } }} },
+	{ QT_TRANSLATE_NOOP("SmartDrummer", "Drill"), QT_TRANSLATE_NOOP("SmartDrummer", "Sliding kicks, late snare and triplet hats"), 142, {{
+		{ "x-----x---x-----", "---o-------o--o-" },
+		{ "--------x-------", "-----------.-x--" },
+		{ "--------x-------", R },
+		{ "o--o--o-o--o-o--", "-.-----.---.--.o" },
+		{ R,                  "------o---------" },
+		{ R,                  "---.-------.----" } }} },
+	{ QT_TRANSLATE_NOOP("SmartDrummer", "Afrobeat"), QT_TRANSLATE_NOOP("SmartDrummer", "Bouncy 3-3-2 rhythm with shakers"), 104, {{
+		{ "x-----o-x-------", "---o------o---o-" },
+		{ "---o--o----o--o-", ".------.-------." },
+		{ R,                  "----o-------o---" },
+		{ "o-o-o-o-o-o-o-o-", "-.-.-.-.-.-.-.-." },
+		{ R,                  "--o-------o-----" },
+		{ "o.o.o.o.o.o.o.o.", R } }} },
+	{ QT_TRANSLATE_NOOP("SmartDrummer", "Cumbia"), QT_TRANSLATE_NOOP("SmartDrummer", "Latin groove with guiro-style shaker"), 96, {{
+		{ "x-------x-------", "------o-------o-" },
+		{ R,                  "-------.-------." },
+		{ "----o-------o---", R },
+		{ R,                  "-.-.-.-.-.-.-.-." },
+		{ "--o---o---o---o-", R },
+		{ "x.o.x.o.x.o.x.o.", R } }} },
 	{ QT_TRANSLATE_NOOP("SmartDrummer", "Lo-Fi"), QT_TRANSLATE_NOOP("SmartDrummer", "Soft, laid-back beat"), 80, {{
 		{ "x------o--o-----", "---o------------" },
 		{ "----o-------o---", "-------.-------." },
@@ -144,12 +165,12 @@ struct RoleInfo
 const std::array<RoleInfo, RoleCount>& roleInfo()
 {
 	static const std::array<RoleInfo, RoleCount> info = {{
-		{ "Kick",     "drums/kick01.ogg",          { "kick", "bombo", "bassdrum", "bass drum", "bd" } },
-		{ "Snare",    "drums/snare01.ogg",         { "snare", "caja", "snr", "sd", "rim" } },
-		{ "Clap",     "drums/clap01.ogg",          { "clap", "palma" } },
-		{ "Hat",      "drums/hihat_closed01.ogg",  { "hat", "hh", "charles" } },
-		{ "Open Hat", "drums/hihat_opened01.ogg",  { "open", "hat_o", "oh" } },
-		{ "Shaker",   "drums/shaker01.ogg",        { "shaker", "perc", "conga", "tom", "cowbell", "clave", "guiro", "tamb" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Kick"),     "drums/kick01.ogg",          { "kick", "bombo", "bassdrum", "bass drum", "bd" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Snare"),    "drums/snare01.ogg",         { "snare", "caja", "snr", "sd", "rim" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Clap"),     "drums/clap01.ogg",          { "clap", "palma" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Hat"),      "drums/hihat_closed01.ogg",  { "hat", "hh", "charles" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Open Hat"), "drums/hihat_opened01.ogg",  { "open", "abierto", "hat_o", "oh" } },
+		{ QT_TRANSLATE_NOOP("SmartDrummer", "Shaker"),   "drums/shaker01.ogg",        { "shaker", "perc", "maraca", "conga", "tom", "cowbell", "clave", "guiro", "güiro", "tamb" } },
 	}};
 	return info;
 }
@@ -374,7 +395,7 @@ InstrumentTrack* SmartDrummerDialog::findOrCreateTrack(Role role, bool create, Q
 		if (!it || used.contains(it)) { continue; }
 		const QString name = it->name().toLower();
 		// "Open hat" must not be taken by the closed hi-hat role and vice versa
-		if (role == Role::Hat && (name.contains("open") || name.contains("hat_o"))) { continue; }
+		if (role == Role::Hat && (name.contains("open") || name.contains("abierto") || name.contains("hat_o"))) { continue; }
 		for (const QString& kw : info.keywords)
 		{
 			const bool shortKw = kw.size() <= 2;
@@ -395,7 +416,8 @@ InstrumentTrack* SmartDrummerDialog::findOrCreateTrack(Role role, bool create, Q
 	{
 		inst->loadFile(ConfigManager::inst()->factorySamplesDir() + info.sample);
 	}
-	it->setName(info.trackName);
+	it->setName(QCoreApplication::translate("SmartDrummer", info.trackName));
+	PatternEditor::routeToNewMixerChannel(it);
 	used.append(it);
 	return it;
 }

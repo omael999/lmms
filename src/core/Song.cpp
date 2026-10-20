@@ -74,6 +74,7 @@ Song::Song() :
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
 	m_masterPitchModel( 0, -12, 12, this, tr( "Master pitch" ) ),
+	m_swingModel(0.f, 0.f, 100.f, 1.f, this, tr("Swing")),
 	m_nLoadingTrack( 0 ),
 	m_fileName(),
 	m_oldFileName(),
@@ -972,6 +973,7 @@ void Song::createNewProject()
 	m_timeSigModel.reset();
 	m_masterVolumeModel.setInitValue( 100 );
 	m_masterPitchModel.setInitValue( 0 );
+	m_swingModel.setInitValue(0);
 
 	QCoreApplication::instance()->processEvents();
 
@@ -1073,6 +1075,8 @@ void Song::loadProject( const QString & fileName )
 	m_timeSigModel.loadSettings( dataFile.head(), "timesig" );
 	m_masterVolumeModel.loadSettings( dataFile.head(), "mastervol" );
 	m_masterPitchModel.loadSettings( dataFile.head(), "masterpitch" );
+	m_swingModel.setValue(0);
+	if (dataFile.head().hasAttribute("swing")) { m_swingModel.loadSettings(dataFile.head(), "swing"); }
 
 	getTimeline(PlayMode::Song).setLoopEnabled(false);
 
@@ -1230,6 +1234,7 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 	m_timeSigModel.saveSettings( dataFile, dataFile.head(), "timesig" );
 	m_masterVolumeModel.saveSettings( dataFile, dataFile.head(), "mastervol" );
 	m_masterPitchModel.saveSettings( dataFile, dataFile.head(), "masterpitch" );
+	m_swingModel.saveSettings(dataFile, dataFile.head(), "swing");
 
 	saveState( dataFile, dataFile.content() );
 

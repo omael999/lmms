@@ -724,6 +724,13 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 
 	bool played_a_note = false;	// will be return variable
 
+	// FL-style swing for the Channel Rack: notes on every second 16th step of a pattern are
+	// delayed by up to half a step. NotePlayHandle carries offsets beyond this period over to the next ones.
+	const bool inPattern = trackContainer() == Engine::patternStore();
+	const float swing = inPattern ? Engine::getSong()->swingModel().value() : 0.f;
+	constexpr int ticksPerStep = DefaultTicksPerBar / DefaultStepsPerBar;
+	const auto swingFrames = static_cast<f_cnt_t>(swing / 100.f * 0.5f * ticksPerStep * frames_per_tick);
+
 	for (const auto& clip : clips)
 	{
 		auto c = dynamic_cast<MidiClip*>(clip);
@@ -775,7 +782,9 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 				? 0
 				: (currentNote->endPos() - cur_start - noteOverlap) * frames_per_tick;
 
-			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(this, _offset, noteFrames, *currentNote);
+			const bool swungStep = swingFrames > 0 && currentNote->pos() % (2 * ticksPerStep) == ticksPerStep;
+			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(
+				this, _offset + (swungStep ? swingFrames : 0), noteFrames, *currentNote);
 			notePlayHandle->setPatternTrack(pattern_track);
 			// are we playing global song?
 			if( _clip_num < 0 )

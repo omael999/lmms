@@ -28,6 +28,7 @@
 #include <QBasicTimer>
 #include <QTimer>
 #include <QList>
+#include <vector>
 #include <QMainWindow>
 #include <QMdiArea>
 
@@ -145,6 +146,14 @@ public:
 	//! FL-style transport: true = SONG (playlist) mode, false = PAT (channel rack) mode
 	bool isSongMode() const { return m_songMode; }
 
+	//! FL-style docked workspace: Playlist fills the background, Mixer docked at the bottom,
+	//! Piano Roll / Automation Editor share the Playlist's area, Channel Rack floats on top.
+	bool isFlLayout() const { return m_flLayout; }
+	//! The part of the workspace used by the Playlist (everything above the docked Mixer)
+	QRect flMainArea() const;
+	//! Position a floating window (e.g. channel settings) next to the Channel Rack, like FL
+	void placeNextToChannelRack(QWidget* subWindow);
+
 signals:
 	void detachAllSubWindows(bool detached);
 	void transportModeChanged(bool songMode);
@@ -184,6 +193,8 @@ public slots:
 	void transportStop();
 	void transportRecord();
 	void hideAllEditorWindows();
+	void organizeWindows();
+	void setFlLayout(bool on);
 
 	void updateUndoRedoButtons();
 	void undo();
@@ -212,7 +223,13 @@ private:
 
 	void createTransport();
 	void updateTransportButtons();
-	void arrangeStartupWindows();
+	void applyProjectLayout();
+	void layoutDockedWindows();
+	void scheduleLayout();
+	void placeChannelRack();
+	void fitChannelRackHeight();
+	int channelRackAutoHeight() const;
+	bool isDockedSubWindow(const QObject* o) const;
 
 	void exportProject(bool multiExport = false);
 	void handleSaveResult(QString const & filename, bool songSavedSuccessfully);
@@ -234,7 +251,7 @@ private:
 		int m_lastY;
 	};
 
-	MovableQMdiArea * m_workspace;
+	MovableQMdiArea * m_workspace = nullptr;
 
 	QWidget * m_toolBar;
 	QGridLayout * m_toolBarLayout;
@@ -268,6 +285,10 @@ private:
 	ToolButton * m_metronomeToggle;
 
 	bool m_songMode = false;
+	bool m_flLayout = true;
+	bool m_layoutScheduled = false;
+	int m_rackAutoHeight = -1;
+	std::vector<QObject*> m_dockedWindows;
 	QToolButton* m_patModeButton = nullptr;
 	QToolButton* m_songModeButton = nullptr;
 	QToolButton* m_transportPlayButton = nullptr;

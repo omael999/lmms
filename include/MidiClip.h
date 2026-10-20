@@ -77,6 +77,23 @@ public:
 
 	Note * addStepNote( int step );
 	int steps() const { return m_steps; }
+
+	//! FL-style Channel Rack step tools (they only touch step notes, melody notes are kept)
+	enum class StepTool
+	{
+		FillEach,     //!< param = N: a hit every N steps (replaces the steps)
+		ShiftLeft,    //!< rotate one step to the left
+		ShiftRight,   //!< rotate one step to the right
+		Reverse,      //!< mirror the pattern
+		Invert,       //!< every empty step gets a hit, every hit is removed
+		Randomize,    //!< param = density in percent
+		Humanize,     //!< param = amount: random velocity variation
+		Accent,       //!< louder on beats, softer elsewhere
+		Paste,        //!< paste the steps copied with copyStepsToClipboard()
+	};
+	void applyStepTool(StepTool tool, int param = 0);
+	void copyStepsToClipboard() const;
+	static bool hasStepsInClipboard();
 	void setStep( int step, bool enabled );
 
 	//! Horizontally flip the positions of the given notes.

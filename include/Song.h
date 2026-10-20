@@ -310,6 +310,12 @@ public:
 		return m_tempoModel;
 	}
 
+	//! FL-style Channel Rack swing (0-100 %): delays every second 16th step of the patterns
+	FloatModel& swingModel()
+	{
+		return m_swingModel;
+	}
+
 	void exportProjectMidi(const std::filesystem::path& filePath) const;
 
 	inline void setLoadOnLaunch(bool value) { m_loadOnLaunch = value; }
@@ -411,6 +417,7 @@ private:
 	int m_oldTicksPerBar;
 	IntModel m_masterVolumeModel;
 	IntModel m_masterPitchModel;
+	FloatModel m_swingModel;
 
 	ControllerVector m_controllers;
 

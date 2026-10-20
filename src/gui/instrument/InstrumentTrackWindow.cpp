@@ -29,6 +29,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMdiSubWindow>
 #include <QMenu>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -521,6 +522,15 @@ void InstrumentTrackWindow::toggleVisibility( bool on )
 {
 	if( on )
 	{
+		// FL-style workspace: channel settings open next to the Channel Rack the first time
+		auto mainWindow = getGUI()->mainWindow();
+		QWidget* subWin = parentWidget();
+		if (mainWindow->isFlLayout() && subWin && !subWin->property("novabeatPlaced").toBool()
+			&& qobject_cast<QMdiSubWindow*>(subWin))
+		{
+			mainWindow->placeNextToChannelRack(subWin);
+			subWin->setProperty("novabeatPlaced", true);
+		}
 		show();
 		parentWidget()->show();
 		parentWidget()->raise();

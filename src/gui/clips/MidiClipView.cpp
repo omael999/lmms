@@ -241,6 +241,38 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 						tr( "Change name" ),
 						this, SLOT(changeName()));
 
+	if (isBeat && fixedClips())
+	{
+		// FL-style Channel Rack tools
+		using Tool = MidiClip::StepTool;
+		_cm->addSeparator();
+		QMenu* fill = _cm->addMenu(embed::getIconPixmap("step_btn_add"), tr("Fill steps"));
+		fill->addAction(tr("Fill each 2 steps"), this, [this]() { applyStepTool(static_cast<int>(Tool::FillEach), 2); });
+		fill->addAction(tr("Fill each 4 steps"), this, [this]() { applyStepTool(static_cast<int>(Tool::FillEach), 4); });
+		fill->addAction(tr("Fill each 8 steps"), this, [this]() { applyStepTool(static_cast<int>(Tool::FillEach), 8); });
+		fill->addAction(tr("Fill all steps"), this, [this]() { applyStepTool(static_cast<int>(Tool::FillEach), 1); });
+
+		QMenu* tools = _cm->addMenu(embed::getIconPixmap("drummer"), tr("Step tools"));
+		tools->addAction(embed::getIconPixmap("arrow-left"), tr("Shift left"), this,
+			[this]() { applyStepTool(static_cast<int>(Tool::ShiftLeft), 0); });
+		tools->addAction(embed::getIconPixmap("arrow-right"), tr("Shift right"), this,
+			[this]() { applyStepTool(static_cast<int>(Tool::ShiftRight), 0); });
+		tools->addAction(embed::getIconPixmap("flip_x"), tr("Reverse"), this,
+			[this]() { applyStepTool(static_cast<int>(Tool::Reverse), 0); });
+		tools->addAction(tr("Invert (swap hits and rests)"), this,
+			[this]() { applyStepTool(static_cast<int>(Tool::Invert), 0); });
+		tools->addSeparator();
+		tools->addAction(tr("Randomize"), this, [this]() { applyStepTool(static_cast<int>(Tool::Randomize), 35); });
+		tools->addAction(tr("Humanize velocity"), this, [this]() { applyStepTool(static_cast<int>(Tool::Humanize), 12); });
+		tools->addAction(tr("Accent the beats"), this, [this]() { applyStepTool(static_cast<int>(Tool::Accent), 0); });
+		tools->addSeparator();
+		tools->addAction(embed::getIconPixmap("edit_copy"), tr("Copy steps"), this,
+			[this]() { m_clip->copyStepsToClipboard(); });
+		QAction* paste = tools->addAction(embed::getIconPixmap("edit_paste"), tr("Paste steps"), this,
+			[this]() { applyStepTool(static_cast<int>(Tool::Paste), 0); });
+		paste->setEnabled(MidiClip::hasStepsInClipboard());
+	}
+
 	if (isBeat)
 	{
 		_cm->addSeparator();
@@ -448,8 +480,13 @@ void MidiClipView::mousePressEvent( QMouseEvent * _me )
 
 		Note * n = m_clip->noteAtStep( step );
 
+		// remember what this click did, so dragging paints (or erases) more steps like in FL
+		m_paintStep = step;
+		m_paintAdd = (n == nullptr);
+
 		if( n == nullptr )
 		{
+			m_clip->addJournalCheckPoint();
 			m_clip->addStepNote( step );
 		}
 		else // note at step found
@@ -474,6 +511,70 @@ void MidiClipView::mousePressEvent( QMouseEvent * _me )
 		ClipView::mousePressEvent( _me );
 	}
 }
+
+int MidiClipView::stepAt(int x) const
+{
+	const float tmp = ((static_cast<float>(x) - BORDER_WIDTH) * static_cast<float>(m_clip->m_steps))
+		/ static_cast<float>(width() - BORDER_WIDTH * 2);
+	const int step = static_cast<int>(tmp);
+	return (tmp < 0 || step >= m_clip->m_steps) ? -1 : step;
+}
+
+
+
+
+void MidiClipView::mouseMoveEvent(QMouseEvent* me)
+{
+	if (m_paintStep >= 0 && (me->buttons() & Qt::LeftButton))
+	{
+		const int step = stepAt(position(me).x());
+		if (step >= 0 && step != m_paintStep)
+		{
+			// paint every step between the last one and this one, so fast drags don't leave gaps
+			const int from = std::min(step, m_paintStep);
+			const int to = std::max(step, m_paintStep);
+			for (int s = from; s <= to; ++s)
+			{
+				const bool hasNote = m_clip->noteAtStep(s) != nullptr;
+				if (hasNote != m_paintAdd) { m_clip->setStep(s, m_paintAdd); }
+			}
+			m_paintStep = step;
+			Engine::getSong()->setModified();
+			update();
+		}
+		me->accept();
+		return;
+	}
+	ClipView::mouseMoveEvent(me);
+}
+
+
+
+
+void MidiClipView::mouseReleaseEvent(QMouseEvent* me)
+{
+	if (m_paintStep >= 0)
+	{
+		m_paintStep = -1;
+		m_clip->updatePatternTrack();
+		me->accept();
+		return;
+	}
+	ClipView::mouseReleaseEvent(me);
+}
+
+
+
+
+void MidiClipView::applyStepTool(int tool, int param)
+{
+	m_clip->applyStepTool(static_cast<MidiClip::StepTool>(tool), param);
+	Engine::getSong()->setModified();
+	update();
+}
+
+
+
 
 void MidiClipView::mouseDoubleClickEvent(QMouseEvent *_me)
 {

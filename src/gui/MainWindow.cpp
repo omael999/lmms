@@ -24,6 +24,8 @@
 
 #include "MainWindow.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -82,6 +84,23 @@
 
 namespace lmms::gui
 {
+
+namespace
+{
+
+bool isAttachedSubWindow(const QWidget* w)
+{
+	auto sw = qobject_cast<const SubWindow*>(w);
+	return sw && !sw->isDetached();
+}
+
+QWidget* subWindowOf(QWidget* w) { return w ? w->parentWidget() : nullptr; }
+
+} // namespace
+
+
+
+
 
 
 MainWindow::MainWindow() :
@@ -204,6 +223,12 @@ MainWindow::MainWindow() :
 	m_toolBarLayout = new QGridLayout( m_toolBar/*, 2, 1*/ );
 	m_toolBarLayout->setContentsMargins(0, 0, 0, 0);
 	m_toolBarLayout->setSpacing( 0 );
+
+	// NovaBeat defaults: a single channel-settings window at a time (less clutter, like FL)
+	if (ConfigManager::inst()->value("ui", "oneinstrumenttrackwindow").isEmpty())
+	{
+		ConfigManager::inst()->setValue("ui", "oneinstrumenttrackwindow", "1");
+	}
 
 	// FL-style PAT/SONG transport, placed right after the project/window buttons
 	m_songMode = ConfigManager::inst()->value("ui", "transportsongmode").toInt() != 0;
@@ -483,6 +508,11 @@ void MainWindow::finalize()
 	m_toolBarLayout->addWidget( mixer_window, 1, 5 );
 	m_toolBarLayout->addWidget( controllers_window, 1, 6 );
 	m_toolBarLayout->addWidget( project_notes_window, 1, 7 );
+
+	auto organize_windows = new ToolButton(embed::getIconPixmap("organize"),
+		tr("Organize windows") + " (" + keySequence(Qt::CTRL, Qt::SHIFT, Qt::Key_W).toString(QKeySequence::NativeText) + ")",
+		this, SLOT(organizeWindows()), m_toolBar);
+	m_toolBarLayout->addWidget(organize_windows, 1, 8);
 	m_toolBarLayout->setColumnStretch( 100, 1 );
 
 	// setup-dialog opened before?
@@ -521,26 +551,42 @@ void MainWindow::finalize()
 	getGUI()->songEditor()->parentWidget()->move(5, 5);
 	getGUI()->songEditor()->parentWidget()->show();
 
-	// New projects get the FL-style window arrangement once the workspace has its final size
-	// (createNewProjectFromTemplate() clears the file name right after loading, so check it afterwards)
+	// FL-style docked workspace (can be turned off in View > "Docked FL layout")
+	m_flLayout = ConfigManager::inst()->value("ui", "fllayout", "1").toInt() != 0;
+	for (QWidget* w : {subWindowOf(getGUI()->songEditor()), subWindowOf(getGUI()->pianoRoll()),
+		subWindowOf(getGUI()->automationEditor()), subWindowOf(getGUI()->mixerView())})
+	{
+		if (w)
+		{
+			m_dockedWindows.push_back(w);
+			w->installEventFilter(this);
+		}
+	}
+	m_workspace->viewport()->installEventFilter(this);
+
+	// Every project (new or loaded) gets the tidy layout once its windows have been restored
 	connect(Engine::getSong(), &Song::projectLoaded, this, [this]() {
-		QTimer::singleShot(0, this, [this]() {
-			if (Engine::getSong()->projectFileName().isEmpty()) { arrangeStartupWindows(); }
-		});
+		QTimer::singleShot(0, this, [this]() { applyProjectLayout(); });
 	});
-	// FL behaviour: while the Playlist fills the workspace it stays behind the floating windows
-	// (Channel Rack, Piano Roll, Mixer...) even when you click on it.
+	connect(Engine::patternStore(), &TrackContainer::trackAdded, this, [this]() {
+		QTimer::singleShot(0, this, [this]() { fitChannelRackHeight(); });
+	});
+
+	// The Playlist is the background: it stays behind the floating windows even when clicked
 	connect(m_workspace, &QMdiArea::subWindowActivated, this, [this](QMdiSubWindow* sw) {
-		QWidget* songWin = getGUI()->songEditor()->parentWidget();
+		QWidget* songWin = subWindowOf(getGUI()->songEditor());
 		if (sw == nullptr || sw != songWin) { return; }
 		const QSize area = m_workspace->viewport()->size();
-		const bool fillsWorkspace = sw->isMaximized()
+		const bool fillsWorkspace = m_flLayout || sw->isMaximized()
 			|| (sw->width() >= area.width() - 8 && sw->height() >= area.height() - 8);
 		if (fillsWorkspace)
 		{
 			QTimer::singleShot(0, sw, [sw]() { sw->lower(); });
 		}
 	});
+
+	auto organizeShortcut = new QShortcut(keySequence(Qt::CTRL, Qt::SHIFT, Qt::Key_W), this);
+	connect(organizeShortcut, &QShortcut::activated, this, &MainWindow::organizeWindows);
 
 	// Open the sample browser on the left, like FL's browser
 	if (m_sideBar) { m_sideBar->openTab(3); }
@@ -1035,6 +1081,20 @@ void MainWindow::togglePatternEditorWin( bool forceShow )
 
 void MainWindow::toggleSongEditorWin()
 {
+	if (m_flLayout)
+	{
+		// Piano Roll / Automation Editor sit on top of the Playlist: F5 brings the Playlist back
+		bool covered = false;
+		for (QWidget* w : {subWindowOf(getGUI()->pianoRoll()), subWindowOf(getGUI()->automationEditor())})
+		{
+			if (isAttachedSubWindow(w) && w->isVisible()) { w->hide(); covered = true; }
+		}
+		if (covered)
+		{
+			toggleWindow(getGUI()->songEditor(), true);
+			return;
+		}
+	}
 	toggleWindow( getGUI()->songEditor() );
 }
 
@@ -1051,6 +1111,7 @@ void MainWindow::toggleProjectNotesWin()
 
 void MainWindow::togglePianoRollWin()
 {
+	layoutDockedWindows();
 	toggleWindow( getGUI()->pianoRoll() );
 }
 
@@ -1059,6 +1120,7 @@ void MainWindow::togglePianoRollWin()
 
 void MainWindow::toggleAutomationEditorWin()
 {
+	layoutDockedWindows();
 	toggleWindow( getGUI()->automationEditor() );
 }
 
@@ -1068,6 +1130,7 @@ void MainWindow::toggleAutomationEditorWin()
 void MainWindow::toggleMixerWin()
 {
 	toggleWindow( getGUI()->mixerView() );
+	scheduleLayout();
 }
 
 
@@ -1115,6 +1178,22 @@ void MainWindow::updateViewMenu()
 			      tr( "Project Notes" ) + "\tCtrl+7",
 			      this, SLOT(toggleProjectNotesWin())
 		);
+
+	m_viewMenu->addSeparator();
+
+	m_viewMenu->addAction(embed::getIconPixmap("organize"),
+		tr("Organize windows") + "\t" + keySequence(Qt::CTRL, Qt::SHIFT, Qt::Key_W).toString(QKeySequence::NativeText),
+		this, SLOT(organizeWindows()));
+	auto flLayoutAction = new QAction(tr("Docked FL layout"), this);
+	flLayoutAction->setData("fllayout");
+	flLayoutAction->setCheckable(true);
+	flLayoutAction->setChecked(m_flLayout);
+	m_viewMenu->addAction(flLayoutAction);
+	auto oneWindowAction = new QAction(tr("One channel window at a time"), this);
+	oneWindowAction->setData("oneinstrument");
+	oneWindowAction->setCheckable(true);
+	oneWindowAction->setChecked(ConfigManager::inst()->value("ui", "oneinstrumenttrackwindow").toInt());
+	m_viewMenu->addAction(oneWindowAction);
 
 	m_viewMenu->addSeparator();
 	
@@ -1182,6 +1261,10 @@ void MainWindow::updateConfig( QAction * _who )
 		if (checked) { qApp->removeEventFilter(this); }
 		else { qApp->installEventFilter(this); }
 
+	}
+	else if (tag == "fllayout")
+	{
+		setFlLayout(checked);
 	}
 	else if ( tag == "smoothscroll" )
 	{
@@ -1265,7 +1348,7 @@ void MainWindow::createTransport()
 		b->setToolTip(tip);
 		b->setCheckable(true);
 		b->setObjectName("transportModeButton");
-		b->setFixedSize(48, 28);
+		b->setFixedSize(70, 28);
 		b->setFocusPolicy(Qt::NoFocus);
 		return b;
 	};
@@ -1291,14 +1374,15 @@ void MainWindow::createTransport()
 	connect(m_transportStopButton, &QToolButton::clicked, this, &MainWindow::transportStop);
 	connect(m_transportRecordButton, &QToolButton::clicked, this, &MainWindow::transportRecord);
 
-	m_toolBarLayout->setColumnMinimumWidth(8, 16);
-	m_toolBarLayout->addWidget(m_patModeButton, 0, 9, Qt::AlignBottom);
-	m_toolBarLayout->addWidget(m_songModeButton, 1, 9, Qt::AlignTop);
-	m_toolBarLayout->setColumnMinimumWidth(10, 6);
-	m_toolBarLayout->addWidget(m_transportPlayButton, 0, 11, 2, 1);
-	m_toolBarLayout->addWidget(m_transportStopButton, 0, 12, 2, 1);
-	m_toolBarLayout->addWidget(m_transportRecordButton, 0, 13, 2, 1);
-	m_toolBarLayout->setColumnMinimumWidth(14, 8);
+	// column 8 holds the "organize windows" button (added in finalize())
+	m_toolBarLayout->setColumnMinimumWidth(9, 14);
+	m_toolBarLayout->addWidget(m_patModeButton, 0, 10, Qt::AlignBottom);
+	m_toolBarLayout->addWidget(m_songModeButton, 1, 10, Qt::AlignTop);
+	m_toolBarLayout->setColumnMinimumWidth(11, 6);
+	m_toolBarLayout->addWidget(m_transportPlayButton, 0, 12, 2, 1);
+	m_toolBarLayout->addWidget(m_transportStopButton, 0, 13, 2, 1);
+	m_toolBarLayout->addWidget(m_transportRecordButton, 0, 14, 2, 1);
+	m_toolBarLayout->setColumnMinimumWidth(15, 8);
 }
 
 
@@ -1394,33 +1478,226 @@ void MainWindow::hideAllEditorWindows()
 
 
 
-void MainWindow::arrangeStartupWindows()
+// ---------------------------------------------------------------------------
+// FL-style docked workspace
+// ---------------------------------------------------------------------------
+
+bool MainWindow::isDockedSubWindow(const QObject* o) const
+{
+	// Filled in finalize(), once all editors exist (the event filter runs much earlier)
+	return o && std::find(m_dockedWindows.begin(), m_dockedWindows.end(), o) != m_dockedWindows.end();
+}
+
+
+
+
+QRect MainWindow::flMainArea() const
 {
 	const QSize area = m_workspace->viewport()->size();
-	if (area.width() < 400 || area.height() < 300) { return; }
+	int mixerHeight = 0;
+	QWidget* mixWin = subWindowOf(getGUI()->mixerView());
+	if (m_flLayout && mixWin && mixWin->isVisible() && isAttachedSubWindow(mixWin) && !mixWin->isMaximized())
+	{
+		const int wanted = std::max({mixWin->minimumSizeHint().height(), mixWin->minimumHeight(), 300});
+		mixerHeight = std::min(wanted, area.height() * 55 / 100);
+	}
+	return QRect(0, 0, area.width(), std::max(120, area.height() - mixerHeight));
+}
 
-	QWidget* songWin = getGUI()->songEditor()->parentWidget();
-	QWidget* patWin = getGUI()->patternEditor()->parentWidget();
 
-	// Playlist fills the workspace like FL's main playlist
-	songWin->setGeometry(0, 0, area.width(), area.height());
-	songWin->show();
-	getGUI()->songEditor()->show();
 
-	// Channel Rack floats on top of it
-	// Size the rack to its channels (about 32 px per row plus toolbar and ruler), like FL's compact rack
+
+void MainWindow::scheduleLayout()
+{
+	if (m_layoutScheduled || !m_flLayout) { return; }
+	m_layoutScheduled = true;
+	QTimer::singleShot(0, this, [this]() {
+		m_layoutScheduled = false;
+		layoutDockedWindows();
+	});
+}
+
+
+
+
+void MainWindow::layoutDockedWindows()
+{
+	const auto gui = getGUI();
+	if (!m_flLayout || !gui || !gui->mixerView()) { return; }
+	const QSize area = m_workspace->viewport()->size();
+	if (area.width() < 300 || area.height() < 200) { return; }
+
+	const QRect main = flMainArea();
+
+	// Mixer: docked along the bottom edge, full width
+	QWidget* mixWin = subWindowOf(gui->mixerView());
+	if (isAttachedSubWindow(mixWin) && mixWin->isVisible() && !mixWin->isMaximized())
+	{
+		mixWin->setGeometry(0, main.height(), area.width(), area.height() - main.height());
+	}
+
+	// Playlist, Piano Roll and Automation Editor share the main area (like tabs, switched with F5/F7/F8)
+	for (QWidget* w : {subWindowOf(gui->songEditor()), subWindowOf(gui->pianoRoll()),
+		subWindowOf(gui->automationEditor())})
+	{
+		if (isAttachedSubWindow(w) && !w->isMaximized() && w->geometry() != main) { w->setGeometry(main); }
+	}
+
+	// Floating windows must stay reachable after the workspace shrinks
+	for (QMdiSubWindow* sw : m_workspace->subWindowList())
+	{
+		if (isDockedSubWindow(sw) || !sw->isVisible() || sw->isMaximized()) { continue; }
+		const QRect g = sw->geometry();
+		const int x = std::clamp(g.x(), 0, std::max(0, area.width() - std::min(g.width(), area.width())));
+		const int y = std::clamp(g.y(), 0, std::max(0, area.height() - 40));
+		if (x != g.x() || y != g.y()) { sw->move(x, y); }
+	}
+}
+
+
+
+
+int MainWindow::channelRackAutoHeight() const
+{
 	const int rows = std::max<int>(4, static_cast<int>(Engine::patternStore()->tracks().size()));
-	const int w = std::min(820, area.width() - 60);
-	const int h = std::min(110 + 32 * rows + 24, area.height() - 60);
-	patWin->setGeometry(std::max(10, area.width() / 2 - w / 2 - 80), 40, w, h);
-	patWin->show();
-	getGUI()->patternEditor()->show();
-	patWin->raise();
-	m_workspace->setActiveSubWindow(qobject_cast<QMdiSubWindow*>(patWin));
+	// title bar + two toolbars + ruler + one 32 px row per channel
+	return 122 + 32 * rows;
+}
 
-	getGUI()->pianoRoll()->parentWidget()->hide();
-	getGUI()->automationEditor()->parentWidget()->hide();
-	if (getGUI()->mixerView()->parentWidget()) { getGUI()->mixerView()->parentWidget()->hide(); }
+
+
+
+void MainWindow::placeChannelRack()
+{
+	QWidget* rackWin = subWindowOf(getGUI()->patternEditor());
+	if (!isAttachedSubWindow(rackWin)) { return; }
+	const QRect main = flMainArea();
+	const int w = std::min(900, main.width() - 40);
+	const int h = std::min(channelRackAutoHeight(), main.height() - 56);
+	const int x = std::max(12, (main.width() - w) / 2 - main.width() / 12);
+	rackWin->setGeometry(x, 44, w, h);
+	m_rackAutoHeight = rackWin->height();
+}
+
+
+
+
+void MainWindow::fitChannelRackHeight()
+{
+	// Grow/shrink the Channel Rack with its channels, unless the user resized it by hand
+	QWidget* rackWin = subWindowOf(getGUI()->patternEditor());
+	if (!m_flLayout || !isAttachedSubWindow(rackWin) || rackWin->isMaximized()) { return; }
+	if (m_rackAutoHeight > 0 && rackWin->height() != m_rackAutoHeight) { return; }
+	const QRect main = flMainArea();
+	const int h = std::min(channelRackAutoHeight(), main.height() - rackWin->y() - 8);
+	if (h > 150 && h != rackWin->height())
+	{
+		rackWin->resize(rackWin->width(), h);
+	}
+	m_rackAutoHeight = rackWin->height();
+}
+
+
+
+
+void MainWindow::placeNextToChannelRack(QWidget* w)
+{
+	if (!w) { return; }
+	const QRect main = flMainArea();
+	QSize s = w->size();
+	if (s.width() < 100 || s.height() < 100) { s = w->sizeHint(); }
+	QWidget* rackWin = subWindowOf(getGUI()->patternEditor());
+	int x = main.width() - s.width() - 12;
+	int y = 44;
+	if (rackWin && rackWin->isVisible() && isAttachedSubWindow(rackWin))
+	{
+		x = rackWin->geometry().right() + 8;
+		y = rackWin->geometry().top();
+	}
+	if (x + s.width() > main.width()) { x = std::max(0, main.width() - s.width() - 8); }
+	y = std::clamp(y, 0, std::max(0, main.height() - s.height()));
+	w->move(x, y);
+}
+
+
+
+
+void MainWindow::applyProjectLayout()
+{
+	if (!m_flLayout) { return; }
+	const auto gui = getGUI();
+
+	// Every project opens tidy: Playlist + Channel Rack, everything else closed
+	for (QWidget* w : {subWindowOf(gui->pianoRoll()), subWindowOf(gui->automationEditor()),
+		subWindowOf(gui->mixerView()), subWindowOf(gui->getControllerRackView()),
+		subWindowOf(gui->getProjectNotes())})
+	{
+		if (w && isAttachedSubWindow(w)) { w->hide(); }
+	}
+
+	QWidget* songWin = subWindowOf(gui->songEditor());
+	if (songWin->isMaximized()) { songWin->showNormal(); }
+	songWin->show();
+	gui->songEditor()->show();
+	layoutDockedWindows();
+
+	QWidget* rackWin = subWindowOf(gui->patternEditor());
+	if (rackWin->isMaximized()) { rackWin->showNormal(); }
+	placeChannelRack();
+	rackWin->show();
+	gui->patternEditor()->show();
+	rackWin->raise();
+	m_workspace->setActiveSubWindow(qobject_cast<QMdiSubWindow*>(rackWin));
+}
+
+
+
+
+void MainWindow::organizeWindows()
+{
+	if (!m_flLayout) { setFlLayout(true); return; }
+	const auto gui = getGUI();
+	QWidget* songWin = subWindowOf(gui->songEditor());
+	if (isAttachedSubWindow(songWin))
+	{
+		if (songWin->isMaximized()) { songWin->showNormal(); }
+		songWin->show();
+		gui->songEditor()->show();
+	}
+	for (QWidget* w : {subWindowOf(gui->pianoRoll()), subWindowOf(gui->automationEditor()), subWindowOf(gui->mixerView())})
+	{
+		if (w && w->isMaximized()) { w->showNormal(); }
+	}
+	layoutDockedWindows();
+
+	QWidget* rackWin = subWindowOf(gui->patternEditor());
+	if (rackWin->isMaximized()) { rackWin->showNormal(); }
+	placeChannelRack();
+	rackWin->show();
+	gui->patternEditor()->show();
+	rackWin->raise();
+
+	// Channel settings / effect windows: stack them neatly next to the Channel Rack
+	int offset = 0;
+	for (QMdiSubWindow* sw : m_workspace->subWindowList(QMdiArea::StackingOrder))
+	{
+		if (sw == rackWin || isDockedSubWindow(sw) || !sw->isVisible() || !isAttachedSubWindow(sw)) { continue; }
+		if (sw->isMaximized()) { sw->showNormal(); }
+		placeNextToChannelRack(sw);
+		sw->move(sw->x() + offset, sw->y() + offset);
+		offset += 24;
+		sw->raise();
+	}
+}
+
+
+
+
+void MainWindow::setFlLayout(bool on)
+{
+	m_flLayout = on;
+	ConfigManager::inst()->setValue("ui", "fllayout", QString::number(on ? 1 : 0));
+	if (on) { organizeWindows(); }
 }
 
 
@@ -1504,6 +1781,39 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 
 		return false;
 	};
+
+	// FL-style docked workspace: follow workspace resizes and keep docked windows in place
+	if (m_workspace && watched == m_workspace->viewport())
+	{
+		if (event->type() == QEvent::Resize) { scheduleLayout(); }
+		return QObject::eventFilter(watched, event);
+	}
+	if (isDockedSubWindow(watched))
+	{
+		auto sw = static_cast<QMdiSubWindow*>(watched);
+		switch (event->type())
+		{
+			case QEvent::Show:
+			case QEvent::Hide:
+				scheduleLayout();
+				break;
+			case QEvent::MouseButtonPress:
+			case QEvent::MouseButtonDblClick:
+			case QEvent::MouseMove:
+			case QEvent::MouseButtonRelease:
+				// Docked windows can't be dragged or resized by their frame (use View > "Docked FL layout" to unlock)
+				if (m_flLayout && isAttachedSubWindow(sw) && !sw->isMaximized())
+				{
+					if (event->type() == QEvent::MouseButtonPress) { m_workspace->setActiveSubWindow(sw); }
+					sw->unsetCursor();
+					return true;
+				}
+				break;
+			default:
+				break;
+		}
+		return QObject::eventFilter(watched, event);
+	}
 
 	// Clear modifiers when the window has been unfocused (install event filter on the window itself)
 	if (dynamic_cast<MainWindow*>(watched) != nullptr && isWinDeactivate(event))

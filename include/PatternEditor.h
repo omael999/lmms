@@ -31,6 +31,7 @@
 namespace lmms
 {
 
+class InstrumentTrack;
 class PatternStore;
 
 namespace gui
@@ -52,6 +53,11 @@ public:
 	}
 
 	void removeViewsForPattern(int pattern);
+	//! Number of steps of the current pattern (its longest channel)
+	int currentSteps() const;
+
+	//! FL-style auto routing: give a new Channel Rack channel its own, named mixer track
+	static void routeToNewMixerChannel(InstrumentTrack* track);
 
 	void saveSettings(QDomDocument& doc, QDomElement& element) override;
 	void loadSettings(const QDomElement& element) override;
@@ -64,6 +70,10 @@ public slots:
 	void addAutomationTrack();
 	void cloneClip();
 	void updateMaxSteps();
+	void clearCurrentPattern();
+
+signals:
+	void stepsChanged(int steps);
 
 protected slots:
 	void dropEvent(QDropEvent * de ) override;

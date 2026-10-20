@@ -58,3 +58,6 @@ IF(BUNDLE_QT_TRANSLATIONS)
 ENDIF()
 
 INSTALL(FILES ${QM_FILES} ${QT_QM_FILES} DESTINATION "${LMMS_DATA_DIR}/locale")
+
+# NovaBeat Studio: Spanish strings for Qt's own dialogs (file dialogs, Yes/No/Cancel buttons...)
+INSTALL(FILES "${CMAKE_CURRENT_SOURCE_DIR}/qt/qt_es.qm" DESTINATION "${LMMS_DATA_DIR}/locale")
